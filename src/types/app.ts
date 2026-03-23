@@ -12,6 +12,8 @@ export interface ProjectSession {
   updated_at?: string;
   lastActivity?: string;
   messageCount?: number;
+  accountId?: string;
+  accountName?: string;
   __provider?: SessionProvider;
   __projectName?: string;
   [key: string]: unknown;

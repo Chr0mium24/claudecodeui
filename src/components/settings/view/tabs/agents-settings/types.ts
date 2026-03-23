@@ -3,6 +3,7 @@ import type {
   AuthStatus,
   AgentCategory,
   ClaudePermissionsState,
+  CodexAccount,
   CursorPermissionsState,
   CodexPermissionMode,
   GeminiPermissionMode,
@@ -14,6 +15,10 @@ import type {
 export type AgentContext = {
   authStatus: AuthStatus;
   onLogin: () => void;
+  codexAccounts?: CodexAccount[];
+  onCreateCodexAccount?: (name: string) => Promise<void>;
+  onSetActiveCodexAccount?: (accountId: string) => Promise<void>;
+  onDeleteCodexAccount?: (accountId: string) => Promise<void>;
 };
 
 export type AgentContextByProvider = Record<AgentProvider, AgentContext>;
@@ -22,10 +27,14 @@ export type AgentsSettingsTabProps = {
   claudeAuthStatus: AuthStatus;
   cursorAuthStatus: AuthStatus;
   codexAuthStatus: AuthStatus;
+  codexAccounts: CodexAccount[];
   geminiAuthStatus: AuthStatus;
   onClaudeLogin: () => void;
   onCursorLogin: () => void;
   onCodexLogin: () => void;
+  onCreateCodexAccount: (name: string) => Promise<void>;
+  onSetActiveCodexAccount: (accountId: string) => Promise<void>;
+  onDeleteCodexAccount: (accountId: string) => Promise<void>;
   onGeminiLogin: () => void;
   claudePermissions: ClaudePermissionsState;
   onClaudePermissionsChange: (value: ClaudePermissionsState) => void;

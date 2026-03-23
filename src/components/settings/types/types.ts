@@ -26,6 +26,22 @@ export type AuthStatus = {
   method?: string;
 };
 
+export type CodexAccount = {
+  id: string;
+  name: string;
+  codexHome: string;
+  isDefault?: boolean;
+  isActive?: boolean;
+  status?: {
+    authenticated?: boolean;
+    email?: string | null;
+    error?: string | null;
+    method?: string | null;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type KeyValueMap = Record<string, string>;
 
 export type McpServerConfig = {

@@ -1,13 +1,18 @@
 import { LogIn } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button } from '../../../../../../../shared/view/ui';
+import { Badge, Button, Input } from '../../../../../../../shared/view/ui';
 import SessionProviderLogo from '../../../../../../llm-logo-provider/SessionProviderLogo';
-import type { AgentProvider, AuthStatus } from '../../../../../types/types';
+import type { AgentProvider, AuthStatus, CodexAccount } from '../../../../../types/types';
 
 type AccountContentProps = {
   agent: AgentProvider;
   authStatus: AuthStatus;
   onLogin: () => void;
+  codexAccounts?: CodexAccount[];
+  onCreateCodexAccount?: (name: string) => Promise<void>;
+  onSetActiveCodexAccount?: (accountId: string) => Promise<void>;
+  onDeleteCodexAccount?: (accountId: string) => Promise<void>;
 };
 
 type AgentVisualConfig = {
@@ -56,9 +61,34 @@ const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
   },
 };
 
-export default function AccountContent({ agent, authStatus, onLogin }: AccountContentProps) {
+export default function AccountContent({
+  agent,
+  authStatus,
+  onLogin,
+  codexAccounts = [],
+  onCreateCodexAccount,
+  onSetActiveCodexAccount,
+  onDeleteCodexAccount,
+}: AccountContentProps) {
   const { t } = useTranslation('settings');
   const config = agentConfig[agent];
+  const [newCodexAccountName, setNewCodexAccountName] = useState('');
+  const [isSubmittingCodexAccount, setIsSubmittingCodexAccount] = useState(false);
+
+  const handleCreateCodexAccount = async () => {
+    const name = newCodexAccountName.trim();
+    if (!name || !onCreateCodexAccount) {
+      return;
+    }
+
+    setIsSubmittingCodexAccount(true);
+    try {
+      await onCreateCodexAccount(name);
+      setNewCodexAccountName('');
+    } finally {
+      setIsSubmittingCodexAccount(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -140,6 +170,87 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
           )}
         </div>
       </div>
+
+      {agent === 'codex' && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="mb-4">
+            <div className="font-medium text-foreground">Codex Accounts</div>
+            <div className="text-sm text-muted-foreground">
+              Login state stays per account. Conversation history is shared across accounts.
+            </div>
+          </div>
+
+          <div className="mb-4 flex gap-2">
+            <Input
+              value={newCodexAccountName}
+              onChange={(event) => setNewCodexAccountName(event.target.value)}
+              placeholder="New account name"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!newCodexAccountName.trim() || isSubmittingCodexAccount}
+              onClick={() => {
+                void handleCreateCodexAccount();
+              }}
+            >
+              Add
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {codexAccounts.map((account) => (
+              <div
+                key={account.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{account.name}</span>
+                    {account.isActive ? (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                        Active
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="truncate text-sm text-muted-foreground">
+                    {account.status?.authenticated
+                      ? `Logged in as ${account.status.email || 'Authenticated'}`
+                      : account.status?.error || 'Not logged in'}
+                  </div>
+                </div>
+
+                <div className="ml-3 flex items-center gap-2">
+                  {!account.isActive && onSetActiveCodexAccount ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void onSetActiveCodexAccount(account.id);
+                      }}
+                    >
+                      Use
+                    </Button>
+                  ) : null}
+                  {!account.isDefault && onDeleteCodexAccount ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        void onDeleteCodexAccount(account.id);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

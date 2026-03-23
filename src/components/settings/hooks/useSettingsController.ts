@@ -13,6 +13,7 @@ import type {
   ClaudeMcpFormState,
   ClaudePermissionsState,
   CodeEditorSettingsState,
+  CodexAccount,
   CodexMcpFormState,
   CodexPermissionMode,
   CursorPermissionsState,
@@ -43,6 +44,16 @@ type StatusApiResponse = {
   email?: string | null;
   error?: string | null;
   method?: string;
+  accountId?: string;
+  accountName?: string;
+};
+
+type CodexAccountsResponse = {
+  success?: boolean;
+  activeAccountId?: string;
+  accounts?: CodexAccount[];
+  account?: CodexAccount;
+  error?: string;
 };
 
 type JsonResult = {
@@ -248,6 +259,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
   const [cursorAuthStatus, setCursorAuthStatus] = useState<AuthStatus>(DEFAULT_AUTH_STATUS);
   const [codexAuthStatus, setCodexAuthStatus] = useState<AuthStatus>(DEFAULT_AUTH_STATUS);
   const [geminiAuthStatus, setGeminiAuthStatus] = useState<AuthStatus>(DEFAULT_AUTH_STATUS);
+  const [codexAccounts, setCodexAccounts] = useState<CodexAccount[]>([]);
 
   const setAuthStatusByProvider = useCallback((provider: AgentProvider, status: AuthStatus) => {
     if (provider === 'claude') {
@@ -341,6 +353,20 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
       setCodexMcpServers(mapCliServersToMcpServers(cliData.servers));
     } catch (error) {
       console.error('Error fetching Codex MCP servers:', error);
+    }
+  }, []);
+
+  const fetchCodexAccounts = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch('/api/codex/accounts');
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await toResponseJson<CodexAccountsResponse>(response);
+      setCodexAccounts(data.accounts || []);
+    } catch (error) {
+      console.error('Error fetching Codex accounts:', error);
     }
   }, []);
 
@@ -711,6 +737,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
         fetchMcpServers(),
         fetchCursorMcpServers(),
         fetchCodexMcpServers(),
+        fetchCodexAccounts(),
       ]);
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -720,7 +747,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
       setCodexPermissionMode('default');
       setProjectSortOrder('name');
     }
-  }, [fetchCodexMcpServers, fetchCursorMcpServers, fetchMcpServers]);
+  }, [fetchCodexAccounts, fetchCodexMcpServers, fetchCursorMcpServers, fetchMcpServers]);
 
   const openLoginForProvider = useCallback((provider: AgentProvider) => {
     setLoginProvider(provider);
@@ -735,7 +762,62 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
 
     setSaveStatus('success');
     void checkAuthStatus(loginProvider);
-  }, [checkAuthStatus, loginProvider]);
+    void fetchCodexAccounts();
+  }, [checkAuthStatus, fetchCodexAccounts, loginProvider]);
+
+  const setActiveCodexAccount = useCallback(async (accountId: string) => {
+    const response = await authenticatedFetch('/api/codex/accounts/active', {
+      method: 'POST',
+      body: JSON.stringify({ accountId }),
+    });
+
+    const data = await toResponseJson<CodexAccountsResponse>(response);
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || 'Failed to switch Codex account');
+    }
+
+    await Promise.all([
+      fetchCodexAccounts(),
+      checkAuthStatus('codex'),
+      fetchCodexMcpServers(),
+    ]);
+  }, [checkAuthStatus, fetchCodexAccounts, fetchCodexMcpServers]);
+
+  const createCodexAccount = useCallback(async (name: string) => {
+    const response = await authenticatedFetch('/api/codex/accounts', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+
+    const data = await toResponseJson<CodexAccountsResponse>(response);
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || 'Failed to create Codex account');
+    }
+
+    if (data.account?.id) {
+      await setActiveCodexAccount(data.account.id);
+      return;
+    }
+
+    await fetchCodexAccounts();
+  }, [fetchCodexAccounts, setActiveCodexAccount]);
+
+  const removeCodexAccount = useCallback(async (accountId: string) => {
+    const response = await authenticatedFetch(`/api/codex/accounts/${accountId}`, {
+      method: 'DELETE',
+    });
+
+    const data = await toResponseJson<CodexAccountsResponse>(response);
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || 'Failed to delete Codex account');
+    }
+
+    await Promise.all([
+      fetchCodexAccounts(),
+      checkAuthStatus('codex'),
+      fetchCodexMcpServers(),
+    ]);
+  }, [checkAuthStatus, fetchCodexAccounts, fetchCodexMcpServers]);
 
   const saveSettings = useCallback(async () => {
     setSaveStatus(null);
@@ -938,6 +1020,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
     claudeAuthStatus,
     cursorAuthStatus,
     codexAuthStatus,
+    codexAccounts,
     geminiAuthStatus,
     geminiPermissionMode,
     setGeminiPermissionMode,
@@ -947,5 +1030,8 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
     loginProvider,
     selectedProject,
     handleLoginComplete,
+    createCodexAccount,
+    setActiveCodexAccount,
+    removeCodexAccount,
   };
 }

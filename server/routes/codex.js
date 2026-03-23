@@ -2,10 +2,17 @@ import express from 'express';
 import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
-import os from 'os';
 import TOML from '@iarna/toml';
 import { getCodexSessions, deleteCodexSession } from '../projects.js';
 import { applyCustomSessionNames, sessionNamesDb } from '../database/db.js';
+import {
+  buildCodexEnvironment,
+  createCodexAccount,
+  deleteCodexAccount,
+  listCodexAccounts,
+  resolveCodexAccountFromRequest,
+  setActiveCodexAccount,
+} from '../codex-accounts.js';
 
 const router = express.Router();
 
@@ -21,13 +28,16 @@ function createCliResponder(res) {
 }
 
 router.get('/config', async (req, res) => {
+  let account;
   try {
-    const configPath = path.join(os.homedir(), '.codex', 'config.toml');
+    account = await resolveCodexAccountFromRequest(req);
+    const configPath = path.join(account.codexHome, 'config.toml');
     const content = await fs.readFile(configPath, 'utf8');
     const config = TOML.parse(content);
 
     res.json({
       success: true,
+      accountId: account.id,
       config: {
         model: config.model || null,
         mcpServers: config.mcp_servers || {},
@@ -38,6 +48,7 @@ router.get('/config', async (req, res) => {
     if (error.code === 'ENOENT') {
       res.json({
         success: true,
+        accountId: account.id,
         config: {
           model: null,
           mcpServers: {},
@@ -82,10 +93,63 @@ router.delete('/sessions/:sessionId', async (req, res) => {
 
 // MCP Server Management Routes
 
+router.get('/accounts', async (req, res) => {
+  try {
+    const data = await listCodexAccounts();
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/accounts', async (req, res) => {
+  try {
+    const account = await createCodexAccount(req.body ?? {});
+    res.status(201).json({ success: true, account });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/accounts/active', async (req, res) => {
+  try {
+    const accountId = typeof req.body?.accountId === 'string' ? req.body.accountId : '';
+    if (!accountId) {
+      return res.status(400).json({ success: false, error: 'accountId is required' });
+    }
+
+    const account = await setActiveCodexAccount(accountId);
+    if (typeof req.app?.locals?.refreshCodexWatchers === 'function') {
+      await req.app.locals.refreshCodexWatchers();
+    }
+
+    res.json({ success: true, account });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/accounts/:accountId', async (req, res) => {
+  try {
+    const deleted = await deleteCodexAccount(req.params.accountId);
+    if (typeof req.app?.locals?.refreshCodexWatchers === 'function') {
+      await req.app.locals.refreshCodexWatchers();
+    }
+
+    res.json({ success: true, account: deleted });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/mcp/cli/list', async (req, res) => {
   try {
+    const account = await resolveCodexAccountFromRequest(req);
     const respond = createCliResponder(res);
-    const proc = spawn('codex', ['mcp', 'list'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn('codex', ['mcp', 'list'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: buildCodexEnvironment(account),
+    });
 
     let stdout = '';
     let stderr = '';
@@ -117,6 +181,7 @@ router.get('/mcp/cli/list', async (req, res) => {
 router.post('/mcp/cli/add', async (req, res) => {
   try {
     const { name, command, args = [], env = {} } = req.body;
+    const account = await resolveCodexAccountFromRequest(req);
 
     if (!name || !command) {
       return res.status(400).json({ error: 'name and command are required' });
@@ -136,7 +201,10 @@ router.post('/mcp/cli/add', async (req, res) => {
     }
 
     const respond = createCliResponder(res);
-    const proc = spawn('codex', cliArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn('codex', cliArgs, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: buildCodexEnvironment(account),
+    });
 
     let stdout = '';
     let stderr = '';
@@ -168,9 +236,13 @@ router.post('/mcp/cli/add', async (req, res) => {
 router.delete('/mcp/cli/remove/:name', async (req, res) => {
   try {
     const { name } = req.params;
+    const account = await resolveCodexAccountFromRequest(req);
 
     const respond = createCliResponder(res);
-    const proc = spawn('codex', ['mcp', 'remove', name], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn('codex', ['mcp', 'remove', name], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: buildCodexEnvironment(account),
+    });
 
     let stdout = '';
     let stderr = '';
@@ -202,9 +274,13 @@ router.delete('/mcp/cli/remove/:name', async (req, res) => {
 router.get('/mcp/cli/get/:name', async (req, res) => {
   try {
     const { name } = req.params;
+    const account = await resolveCodexAccountFromRequest(req);
 
     const respond = createCliResponder(res);
-    const proc = spawn('codex', ['mcp', 'get', name], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn('codex', ['mcp', 'get', name], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: buildCodexEnvironment(account),
+    });
 
     let stdout = '';
     let stderr = '';
@@ -235,7 +311,8 @@ router.get('/mcp/cli/get/:name', async (req, res) => {
 
 router.get('/mcp/config/read', async (req, res) => {
   try {
-    const configPath = path.join(os.homedir(), '.codex', 'config.toml');
+    const account = await resolveCodexAccountFromRequest(req);
+    const configPath = path.join(account.codexHome, 'config.toml');
 
     let configData = null;
 
@@ -247,7 +324,8 @@ router.get('/mcp/config/read', async (req, res) => {
     }
 
     if (!configData) {
-      return res.json({ success: true, configPath, servers: [] });    }
+      return res.json({ success: true, accountId: account.id, configPath, servers: [] });
+    }
 
     const servers = [];
 
@@ -268,7 +346,7 @@ router.get('/mcp/config/read', async (req, res) => {
       }
     }
 
-    res.json({ success: true, configPath, servers });
+    res.json({ success: true, accountId: account.id, configPath, servers });
   } catch (error) {
     res.status(500).json({ error: 'Failed to read Codex configuration', details: error.message });
   }

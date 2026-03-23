@@ -44,7 +44,7 @@ import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
 
-import { getProjects, getSessions, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, searchConversations } from './projects.js';
+import { getProjects, getSessions, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, searchConversations, getCodexSessionMessages, ensureCodexSessionAvailable } from './projects.js';
 import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval, getPendingApprovalsForSession, reconnectSessionWriter } from './claude-sdk.js';
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getActiveCursorSessions } from './cursor-cli.js';
 import { queryCodex, abortCodexSession, isCodexSessionActive, getActiveCodexSessions } from './openai-codex.js';
@@ -73,17 +73,26 @@ import { configureWebPush } from './services/vapid-keys.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { IS_PLATFORM } from './constants/config.js';
 import { getConnectableHost } from '../shared/networkHosts.js';
+import { buildCodexEnvironment, listCodexAccounts, resolveCodexAccount } from './codex-accounts.js';
 
 const VALID_PROVIDERS = ['claude', 'codex', 'cursor', 'gemini'];
 
 // File system watchers for provider project/session folders
-const PROVIDER_WATCH_PATHS = [
-    { provider: 'claude', rootPath: path.join(os.homedir(), '.claude', 'projects') },
-    { provider: 'cursor', rootPath: path.join(os.homedir(), '.cursor', 'chats') },
-    { provider: 'codex', rootPath: path.join(os.homedir(), '.codex', 'sessions') },
-    { provider: 'gemini', rootPath: path.join(os.homedir(), '.gemini', 'projects') },
-    { provider: 'gemini_sessions', rootPath: path.join(os.homedir(), '.gemini', 'sessions') }
-];
+async function getProviderWatchPaths() {
+    const codexAccounts = await listCodexAccounts();
+    const codexWatchPaths = codexAccounts.accounts.map((account) => ({
+        provider: `codex:${account.id}`,
+        rootPath: path.join(account.codexHome, 'sessions'),
+    }));
+
+    return [
+        { provider: 'claude', rootPath: path.join(os.homedir(), '.claude', 'projects') },
+        { provider: 'cursor', rootPath: path.join(os.homedir(), '.cursor', 'chats') },
+        ...codexWatchPaths,
+        { provider: 'gemini', rootPath: path.join(os.homedir(), '.gemini', 'projects') },
+        { provider: 'gemini_sessions', rootPath: path.join(os.homedir(), '.gemini', 'sessions') }
+    ];
+}
 const WATCHER_IGNORED_PATTERNS = [
     '**/node_modules/**',
     '**/.git/**',
@@ -176,7 +185,9 @@ async function setupProjectsWatcher() {
         }, WATCHER_DEBOUNCE_MS);
     };
 
-    for (const { provider, rootPath } of PROVIDER_WATCH_PATHS) {
+    const providerWatchPaths = await getProviderWatchPaths();
+
+    for (const { provider, rootPath } of providerWatchPaths) {
         try {
             // chokidar v4 emits ENOENT via the "error" event for missing roots and will not auto-recover.
             // Ensure provider folders exist before creating the watcher so watching stays active.
@@ -221,6 +232,9 @@ async function setupProjectsWatcher() {
 
 
 const app = express();
+app.locals.refreshCodexWatchers = async () => {
+    await setupProjectsWatcher();
+};
 const server = http.createServer(app);
 
 const ptySessionsMap = new Map();
@@ -1642,6 +1656,7 @@ function handleShellConnection(ws) {
                 const provider = data.provider || 'claude';
                 const initialCommand = data.initialCommand;
                 const isPlainShell = data.isPlainShell || (!!initialCommand && !hasSession) || provider === 'plain-shell';
+                const isCodexLoginCommand = typeof initialCommand === 'string' && /\bcodex\s+login\b/i.test(initialCommand);
                 urlDetectionBuffer = '';
                 announcedAuthUrls.clear();
 
@@ -1649,7 +1664,8 @@ function handleShellConnection(ws) {
                 const isLoginCommand = initialCommand && (
                     initialCommand.includes('setup-token') ||
                     initialCommand.includes('cursor-agent login') ||
-                    initialCommand.includes('auth login')
+                    initialCommand.includes('auth login') ||
+                    isCodexLoginCommand
                 );
 
                 // Include command hash in session key so different commands get separate sessions
@@ -1741,6 +1757,12 @@ function handleShellConnection(ws) {
 
                     // Build shell command — use cwd for project path (never interpolate into shell string)
                     let shellCommand;
+                    let shellEnv = {
+                        ...process.env,
+                        TERM: 'xterm-256color',
+                        COLORTERM: 'truecolor',
+                        FORCE_COLOR: '3'
+                    };
                     if (isPlainShell) {
                         // Plain shell mode - run the initial command in the project directory
                         shellCommand = initialCommand;
@@ -1751,8 +1773,12 @@ function handleShellConnection(ws) {
                             shellCommand = 'cursor-agent';
                         }
                     } else if (provider === 'codex') {
+                        const activeCodexAccount = await resolveCodexAccount();
+                        shellEnv = buildCodexEnvironment(activeCodexAccount, shellEnv);
+
                         // Use codex command; attempt to resume and fall back to a new session when the resume fails.
                         if (hasSession && sessionId) {
+                            await ensureCodexSessionAvailable(sessionId, activeCodexAccount.codexHome);
                             if (os.platform() === 'win32') {
                                 // PowerShell syntax for fallback
                                 shellCommand = `codex resume "${sessionId}"; if ($LASTEXITCODE -ne 0) { codex }`;
@@ -1802,6 +1828,11 @@ function handleShellConnection(ws) {
                         }
                     }
 
+                    if (isPlainShell && isCodexLoginCommand) {
+                        const activeCodexAccount = await resolveCodexAccount();
+                        shellEnv = buildCodexEnvironment(activeCodexAccount, shellEnv);
+                    }
+
                     console.log('🔧 Executing shell command:', shellCommand);
 
                     // Use appropriate shell based on platform
@@ -1818,12 +1849,7 @@ function handleShellConnection(ws) {
                         cols: termCols,
                         rows: termRows,
                         cwd: resolvedProjectPath,
-                        env: {
-                            ...process.env,
-                            TERM: 'xterm-256color',
-                            COLORTERM: 'truecolor',
-                            FORCE_COLOR: '3'
-                        }
+                        env: shellEnv
                     });
 
                     console.log('🟢 Shell process started with PTY, PID:', shellProcess.pid);
@@ -2251,72 +2277,14 @@ app.get('/api/projects/:projectName/sessions/:sessionId/token-usage', authentica
 
         // Handle Codex sessions
         if (provider === 'codex') {
-            const codexSessionsDir = path.join(homeDir, '.codex', 'sessions');
-
-            // Find the session file by searching for the session ID
-            const findSessionFile = async (dir) => {
-                try {
-                    const entries = await fsPromises.readdir(dir, { withFileTypes: true });
-                    for (const entry of entries) {
-                        const fullPath = path.join(dir, entry.name);
-                        if (entry.isDirectory()) {
-                            const found = await findSessionFile(fullPath);
-                            if (found) return found;
-                        } else if (entry.name.includes(safeSessionId) && entry.name.endsWith('.jsonl')) {
-                            return fullPath;
-                        }
-                    }
-                } catch (error) {
-                    // Skip directories we can't read
-                }
-                return null;
-            };
-
-            const sessionFilePath = await findSessionFile(codexSessionsDir);
-
-            if (!sessionFilePath) {
+            const result = await getCodexSessionMessages(safeSessionId, null, 0);
+            if (!result?.tokenUsage) {
                 return res.status(404).json({ error: 'Codex session file not found', sessionId: safeSessionId });
             }
 
-            // Read and parse the Codex JSONL file
-            let fileContent;
-            try {
-                fileContent = await fsPromises.readFile(sessionFilePath, 'utf8');
-            } catch (error) {
-                if (error.code === 'ENOENT') {
-                    return res.status(404).json({ error: 'Session file not found', path: sessionFilePath });
-                }
-                throw error;
-            }
-            const lines = fileContent.trim().split('\n');
-            let totalTokens = 0;
-            let contextWindow = 200000; // Default for Codex/OpenAI
-
-            // Find the latest token_count event with info (scan from end)
-            for (let i = lines.length - 1; i >= 0; i--) {
-                try {
-                    const entry = JSON.parse(lines[i]);
-
-                    // Codex stores token info in event_msg with type: "token_count"
-                    if (entry.type === 'event_msg' && entry.payload?.type === 'token_count' && entry.payload?.info) {
-                        const tokenInfo = entry.payload.info;
-                        if (tokenInfo.total_token_usage) {
-                            totalTokens = tokenInfo.total_token_usage.total_tokens || 0;
-                        }
-                        if (tokenInfo.model_context_window) {
-                            contextWindow = tokenInfo.model_context_window;
-                        }
-                        break; // Stop after finding the latest token count
-                    }
-                } catch (parseError) {
-                    // Skip lines that can't be parsed
-                    continue;
-                }
-            }
-
             return res.json({
-                used: totalTokens,
-                total: contextWindow
+                used: result.tokenUsage.used || 0,
+                total: result.tokenUsage.total || 200000
             });
         }
 

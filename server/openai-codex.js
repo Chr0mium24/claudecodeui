@@ -17,6 +17,8 @@ import { Codex } from '@openai/codex-sdk';
 import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
 import { codexAdapter } from './providers/codex/adapter.js';
 import { createNormalizedMessage } from './providers/types.js';
+import { buildCodexEnvironment, resolveCodexAccount } from './codex-accounts.js';
+import { ensureCodexSessionAvailable } from './projects.js';
 
 // Track active sessions
 const activeCodexSessions = new Map();
@@ -198,7 +200,8 @@ export async function queryCodex(command, options = {}, ws) {
     cwd,
     projectPath,
     model,
-    permissionMode = 'default'
+    permissionMode = 'default',
+    codexAccountId = null,
   } = options;
 
   const workingDirectory = cwd || projectPath || process.cwd();
@@ -211,8 +214,16 @@ export async function queryCodex(command, options = {}, ws) {
   const abortController = new AbortController();
 
   try {
+    const account = await resolveCodexAccount(codexAccountId);
+
+    if (sessionId) {
+      await ensureCodexSessionAvailable(sessionId, account.codexHome);
+    }
+
     // Initialize Codex SDK
-    codex = new Codex();
+    codex = new Codex({
+      env: buildCodexEnvironment(account),
+    });
 
     // Thread options with sandbox and approval settings
     const threadOptions = {
@@ -239,7 +250,9 @@ export async function queryCodex(command, options = {}, ws) {
       codex,
       status: 'running',
       abortController,
-      startedAt: new Date().toISOString()
+      startedAt: new Date().toISOString(),
+      accountId: account.id,
+      accountName: account.name,
     });
 
     // Send session created event

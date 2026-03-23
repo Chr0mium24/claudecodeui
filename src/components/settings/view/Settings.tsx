@@ -58,6 +58,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     claudeAuthStatus,
     cursorAuthStatus,
     codexAuthStatus,
+    codexAccounts,
     geminiAuthStatus,
     geminiPermissionMode,
     setGeminiPermissionMode,
@@ -67,6 +68,9 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     loginProvider,
     selectedProject,
     handleLoginComplete,
+    createCodexAccount,
+    setActiveCodexAccount,
+    removeCodexAccount,
   } = useSettingsController({
     isOpen,
     initialTab,
@@ -160,10 +164,14 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                   claudeAuthStatus={claudeAuthStatus}
                   cursorAuthStatus={cursorAuthStatus}
                   codexAuthStatus={codexAuthStatus}
+                  codexAccounts={codexAccounts}
                   geminiAuthStatus={geminiAuthStatus}
                   onClaudeLogin={() => openLoginForProvider('claude')}
                   onCursorLogin={() => openLoginForProvider('cursor')}
                   onCodexLogin={() => openLoginForProvider('codex')}
+                  onCreateCodexAccount={createCodexAccount}
+                  onSetActiveCodexAccount={setActiveCodexAccount}
+                  onDeleteCodexAccount={removeCodexAccount}
                   onGeminiLogin={() => openLoginForProvider('gemini')}
                   claudePermissions={claudePermissions}
                   onClaudePermissionsChange={setClaudePermissions}
