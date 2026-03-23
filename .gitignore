@@ -94,6 +94,10 @@ temp/
 
 # Vite
 .vite/
+.local/
+.npm-cache/
+.cloudcli/
+.screen-logs/
 
 # Local Netlify folder
 .netlify

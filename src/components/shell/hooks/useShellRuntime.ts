@@ -10,6 +10,7 @@ export function useShellRuntime({
   selectedProject,
   selectedSession,
   initialCommand,
+  accountId = null,
   isPlainShell,
   minimal,
   autoConnect,
@@ -28,6 +29,7 @@ export function useShellRuntime({
   const selectedProjectRef = useRef(selectedProject);
   const selectedSessionRef = useRef(selectedSession);
   const initialCommandRef = useRef(initialCommand);
+  const accountIdRef = useRef(accountId);
   const isPlainShellRef = useRef(isPlainShell);
   const onProcessCompleteRef = useRef(onProcessComplete);
   const authUrlRef = useRef('');
@@ -38,9 +40,10 @@ export function useShellRuntime({
     selectedProjectRef.current = selectedProject;
     selectedSessionRef.current = selectedSession;
     initialCommandRef.current = initialCommand;
+    accountIdRef.current = accountId;
     isPlainShellRef.current = isPlainShell;
     onProcessCompleteRef.current = onProcessComplete;
-  }, [selectedProject, selectedSession, initialCommand, isPlainShell, onProcessComplete]);
+  }, [selectedProject, selectedSession, initialCommand, accountId, isPlainShell, onProcessComplete]);
 
   const setCurrentAuthUrl = useCallback((nextAuthUrl: string) => {
     authUrlRef.current = nextAuthUrl;
@@ -112,6 +115,7 @@ export function useShellRuntime({
     selectedProjectRef,
     selectedSessionRef,
     initialCommandRef,
+    accountIdRef,
     isPlainShellRef,
     onProcessCompleteRef,
     isInitialized,

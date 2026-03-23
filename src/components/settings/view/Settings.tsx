@@ -166,13 +166,13 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                   codexAuthStatus={codexAuthStatus}
                   codexAccounts={codexAccounts}
                   geminiAuthStatus={geminiAuthStatus}
-                  onClaudeLogin={() => openLoginForProvider('claude')}
-                  onCursorLogin={() => openLoginForProvider('cursor')}
-                  onCodexLogin={() => openLoginForProvider('codex')}
+                  onClaudeLogin={() => openLoginForProvider({ provider: 'claude' })}
+                  onCursorLogin={() => openLoginForProvider({ provider: 'cursor' })}
+                  onCodexLogin={(accountId) => openLoginForProvider({ provider: 'codex', accountId })}
                   onCreateCodexAccount={createCodexAccount}
                   onSetActiveCodexAccount={setActiveCodexAccount}
                   onDeleteCodexAccount={removeCodexAccount}
-                  onGeminiLogin={() => openLoginForProvider('gemini')}
+                  onGeminiLogin={() => openLoginForProvider({ provider: 'gemini' })}
                   claudePermissions={claudePermissions}
                   onClaudePermissionsChange={setClaudePermissions}
                   cursorPermissions={cursorPermissions}

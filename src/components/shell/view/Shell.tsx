@@ -25,6 +25,7 @@ type ShellProps = {
   selectedProject?: Project | null;
   selectedSession?: ProjectSession | null;
   initialCommand?: string | null;
+  accountId?: string | null;
   isPlainShell?: boolean;
   onProcessComplete?: ((exitCode: number) => void) | null;
   minimal?: boolean;
@@ -36,6 +37,7 @@ export default function Shell({
   selectedProject = null,
   selectedSession = null,
   initialCommand = null,
+  accountId = null,
   isPlainShell = false,
   onProcessComplete = null,
   minimal = false,
@@ -65,6 +67,7 @@ export default function Shell({
     selectedProject,
     selectedSession,
     initialCommand,
+    accountId,
     isPlainShell,
     minimal,
     autoConnect,

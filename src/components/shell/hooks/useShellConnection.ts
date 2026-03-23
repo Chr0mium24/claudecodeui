@@ -17,6 +17,7 @@ type UseShellConnectionOptions = {
   selectedProjectRef: MutableRefObject<Project | null | undefined>;
   selectedSessionRef: MutableRefObject<ProjectSession | null | undefined>;
   initialCommandRef: MutableRefObject<string | null | undefined>;
+  accountIdRef: MutableRefObject<string | null>;
   isPlainShellRef: MutableRefObject<boolean>;
   onProcessCompleteRef: MutableRefObject<((exitCode: number) => void) | null | undefined>;
   isInitialized: boolean;
@@ -42,6 +43,7 @@ export function useShellConnection({
   selectedProjectRef,
   selectedSessionRef,
   initialCommandRef,
+  accountIdRef,
   isPlainShellRef,
   onProcessCompleteRef,
   isInitialized,
@@ -148,6 +150,7 @@ export function useShellConnection({
               sessionId: isPlainShellRef.current ? null : selectedSessionRef.current?.id || null,
               hasSession: isPlainShellRef.current ? false : Boolean(selectedSessionRef.current),
               provider: isPlainShellRef.current ? 'plain-shell' : (selectedSessionRef.current?.__provider || localStorage.getItem('selected-provider') || 'claude'),
+              accountId: accountIdRef.current,
               cols: currentTerminal.cols,
               rows: currentTerminal.rows,
               initialCommand: initialCommandRef.current,
@@ -183,6 +186,7 @@ export function useShellConnection({
       clearTerminalScreen,
       fitAddonRef,
       handleSocketMessage,
+      accountIdRef,
       initialCommandRef,
       isConnected,
       isConnecting,

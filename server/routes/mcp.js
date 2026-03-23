@@ -10,17 +10,25 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+function createCliResponder(res) {
+  let responded = false;
+  return (status, payload) => {
+    if (responded || res.headersSent) {
+      return;
+    }
+    responded = true;
+    res.status(status).json(payload);
+  };
+}
+
 // Claude CLI command routes
 
 // GET /api/mcp/cli/list - List MCP servers using Claude CLI
 router.get('/cli/list', async (req, res) => {
   try {
     console.log('📋 Listing MCP servers using Claude CLI');
-    
-    const { spawn } = await import('child_process');
-    const { promisify } = await import('util');
-    const exec = promisify(spawn);
-    
+
+    const respond = createCliResponder(res);
     const process = spawn('claude', ['mcp', 'list'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -38,16 +46,24 @@ router.get('/cli/list', async (req, res) => {
     
     process.on('close', (code) => {
       if (code === 0) {
-        res.json({ success: true, output: stdout, servers: parseClaudeListOutput(stdout) });
+        respond(200, { success: true, output: stdout, servers: parseClaudeListOutput(stdout) });
       } else {
         console.error('Claude CLI error:', stderr);
-        res.status(500).json({ error: 'Claude CLI command failed', details: stderr });
+        respond(500, {
+          error: 'Claude CLI command failed',
+          details: stderr || `Exited with code ${code}`
+        });
       }
     });
     
     process.on('error', (error) => {
       console.error('Error running Claude CLI:', error);
-      res.status(500).json({ error: 'Failed to run Claude CLI', details: error.message });
+      const isMissing = error?.code === 'ENOENT';
+      respond(isMissing ? 503 : 500, {
+        error: isMissing ? 'Claude CLI not installed' : 'Failed to run Claude CLI',
+        details: error.message,
+        code: error.code
+      });
     });
   } catch (error) {
     console.error('Error listing MCP servers via CLI:', error);
@@ -61,8 +77,6 @@ router.post('/cli/add', async (req, res) => {
     const { name, type = 'stdio', command, args = [], url, headers = {}, env = {}, scope = 'user', projectPath } = req.body;
     
     console.log(`➕ Adding MCP server using Claude CLI (${scope} scope):`, name);
-    
-    const { spawn } = await import('child_process');
     
     let cliArgs = ['mcp', 'add'];
     
@@ -106,6 +120,7 @@ router.post('/cli/add', async (req, res) => {
       console.log('📁 Running in project directory:', projectPath);
     }
     
+    const respond = createCliResponder(res);
     const process = spawn('claude', cliArgs, spawnOptions);
     
     let stdout = '';
@@ -121,16 +136,24 @@ router.post('/cli/add', async (req, res) => {
     
     process.on('close', (code) => {
       if (code === 0) {
-        res.json({ success: true, output: stdout, message: `MCP server "${name}" added successfully` });
+        respond(200, { success: true, output: stdout, message: `MCP server "${name}" added successfully` });
       } else {
         console.error('Claude CLI error:', stderr);
-        res.status(400).json({ error: 'Claude CLI command failed', details: stderr });
+        respond(400, {
+          error: 'Claude CLI command failed',
+          details: stderr || `Exited with code ${code}`
+        });
       }
     });
     
     process.on('error', (error) => {
       console.error('Error running Claude CLI:', error);
-      res.status(500).json({ error: 'Failed to run Claude CLI', details: error.message });
+      const isMissing = error?.code === 'ENOENT';
+      respond(isMissing ? 503 : 500, {
+        error: isMissing ? 'Claude CLI not installed' : 'Failed to run Claude CLI',
+        details: error.message,
+        code: error.code
+      });
     });
   } catch (error) {
     console.error('Error adding MCP server via CLI:', error);
@@ -178,8 +201,6 @@ router.post('/cli/add-json', async (req, res) => {
       });
     }
     
-    const { spawn } = await import('child_process');
-    
     // Build the command: claude mcp add-json --scope <scope> <name> '<json>'
     const cliArgs = ['mcp', 'add-json', '--scope', scope, name];
     
@@ -199,6 +220,7 @@ router.post('/cli/add-json', async (req, res) => {
       console.log('📁 Running in project directory:', projectPath);
     }
     
+    const respond = createCliResponder(res);
     const process = spawn('claude', cliArgs, spawnOptions);
     
     let stdout = '';
@@ -214,16 +236,28 @@ router.post('/cli/add-json', async (req, res) => {
     
     process.on('close', (code) => {
       if (code === 0) {
-        res.json({ success: true, output: stdout, message: `MCP server "${name}" added successfully via JSON` });
+        respond(200, {
+          success: true,
+          output: stdout,
+          message: `MCP server "${name}" added successfully via JSON`
+        });
       } else {
         console.error('Claude CLI error:', stderr);
-        res.status(400).json({ error: 'Claude CLI command failed', details: stderr });
+        respond(400, {
+          error: 'Claude CLI command failed',
+          details: stderr || `Exited with code ${code}`
+        });
       }
     });
     
     process.on('error', (error) => {
       console.error('Error running Claude CLI:', error);
-      res.status(500).json({ error: 'Failed to run Claude CLI', details: error.message });
+      const isMissing = error?.code === 'ENOENT';
+      respond(isMissing ? 503 : 500, {
+        error: isMissing ? 'Claude CLI not installed' : 'Failed to run Claude CLI',
+        details: error.message,
+        code: error.code
+      });
     });
   } catch (error) {
     console.error('Error adding MCP server via JSON:', error);
@@ -250,8 +284,6 @@ router.delete('/cli/remove/:name', async (req, res) => {
     
     console.log('🗑️ Removing MCP server using Claude CLI:', actualName, 'scope:', actualScope);
     
-    const { spawn } = await import('child_process');
-    
     // Build command args based on scope
     let cliArgs = ['mcp', 'remove'];
     
@@ -267,6 +299,7 @@ router.delete('/cli/remove/:name', async (req, res) => {
     
     console.log('🔧 Running Claude CLI command:', 'claude', cliArgs.join(' '));
     
+    const respond = createCliResponder(res);
     const process = spawn('claude', cliArgs, {
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -284,16 +317,24 @@ router.delete('/cli/remove/:name', async (req, res) => {
     
     process.on('close', (code) => {
       if (code === 0) {
-        res.json({ success: true, output: stdout, message: `MCP server "${name}" removed successfully` });
+        respond(200, { success: true, output: stdout, message: `MCP server "${name}" removed successfully` });
       } else {
         console.error('Claude CLI error:', stderr);
-        res.status(400).json({ error: 'Claude CLI command failed', details: stderr });
+        respond(400, {
+          error: 'Claude CLI command failed',
+          details: stderr || `Exited with code ${code}`
+        });
       }
     });
     
     process.on('error', (error) => {
       console.error('Error running Claude CLI:', error);
-      res.status(500).json({ error: 'Failed to run Claude CLI', details: error.message });
+      const isMissing = error?.code === 'ENOENT';
+      respond(isMissing ? 503 : 500, {
+        error: isMissing ? 'Claude CLI not installed' : 'Failed to run Claude CLI',
+        details: error.message,
+        code: error.code
+      });
     });
   } catch (error) {
     console.error('Error removing MCP server via CLI:', error);
@@ -308,8 +349,7 @@ router.get('/cli/get/:name', async (req, res) => {
     
     console.log('📄 Getting MCP server details using Claude CLI:', name);
     
-    const { spawn } = await import('child_process');
-    
+    const respond = createCliResponder(res);
     const process = spawn('claude', ['mcp', 'get', name], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -327,16 +367,24 @@ router.get('/cli/get/:name', async (req, res) => {
     
     process.on('close', (code) => {
       if (code === 0) {
-        res.json({ success: true, output: stdout, server: parseClaudeGetOutput(stdout) });
+        respond(200, { success: true, output: stdout, server: parseClaudeGetOutput(stdout) });
       } else {
         console.error('Claude CLI error:', stderr);
-        res.status(404).json({ error: 'Claude CLI command failed', details: stderr });
+        respond(404, {
+          error: 'Claude CLI command failed',
+          details: stderr || `Exited with code ${code}`
+        });
       }
     });
     
     process.on('error', (error) => {
       console.error('Error running Claude CLI:', error);
-      res.status(500).json({ error: 'Failed to run Claude CLI', details: error.message });
+      const isMissing = error?.code === 'ENOENT';
+      respond(isMissing ? 503 : 500, {
+        error: isMissing ? 'Claude CLI not installed' : 'Failed to run Claude CLI',
+        details: error.message,
+        code: error.code
+      });
     });
   } catch (error) {
     console.error('Error getting MCP server details via CLI:', error);

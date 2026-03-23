@@ -11,6 +11,7 @@ export type ShellInitMessage = {
   sessionId: string | null;
   hasSession: boolean;
   provider: string;
+  accountId?: string | null;
   cols: number;
   rows: number;
   initialCommand: string | null | undefined;
@@ -40,6 +41,7 @@ export type UseShellRuntimeOptions = {
   selectedProject: Project | null | undefined;
   selectedSession: ProjectSession | null | undefined;
   initialCommand: string | null | undefined;
+  accountId?: string | null;
   isPlainShell: boolean;
   minimal: boolean;
   autoConnect: boolean;

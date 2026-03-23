@@ -49,10 +49,13 @@ export default function ShellMinimalView({
       />
 
       {showMobileAuthPanel && (
-        <div className="absolute inset-x-0 bottom-14 z-20 border-t border-gray-700/80 bg-gray-900/95 p-3 backdrop-blur-sm md:hidden">
+        <div className="absolute inset-x-0 bottom-14 z-20 border-t border-gray-700/80 bg-gray-900/95 p-3 backdrop-blur-sm md:bottom-4 md:left-auto md:right-4 md:w-[28rem] md:rounded-lg md:border">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-gray-300">Open or copy the login URL:</p>
+              <div>
+                <p className="text-sm font-medium text-white">OpenAI Login</p>
+                <p className="text-xs text-gray-300">Open or copy the login URL to continue.</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsAuthPanelHidden(true)}
@@ -98,7 +101,7 @@ export default function ShellMinimalView({
       )}
 
       {showMobileAuthPanelToggle && (
-        <div className="absolute bottom-14 right-3 z-20 md:hidden">
+        <div className="absolute bottom-14 right-3 z-20 md:bottom-4 md:right-4">
           <button
             type="button"
             onClick={() => setIsAuthPanelHidden(false)}

@@ -1,6 +1,5 @@
 import { ExternalLink, KeyRound, X } from 'lucide-react';
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
-import { IS_PLATFORM } from '../../../constants/config';
 import type { CliProvider } from '../types';
 
 type LoginModalProject = {
@@ -8,6 +7,7 @@ type LoginModalProject = {
   displayName?: string;
   fullPath?: string;
   path?: string;
+  accountId?: string;
   [key: string]: unknown;
 };
 
@@ -43,7 +43,7 @@ const getProviderCommand = ({
   }
 
   if (provider === 'codex') {
-    return IS_PLATFORM ? 'codex login --device-auth' : 'codex login';
+    return 'codex login --device-auth';
   }
 
   return 'gemini status';
@@ -58,13 +58,14 @@ const getProviderTitle = (provider: CliProvider) => {
 
 const normalizeProject = (project?: LoginModalProject | null) => {
   const normalizedName = project?.name || 'default';
-  const normalizedFullPath = project?.fullPath ?? project?.path ?? (IS_PLATFORM ? '/workspace' : '');
+  const normalizedFullPath = project?.fullPath ?? project?.path ?? '';
 
   return {
     name: normalizedName,
     displayName: project?.displayName || normalizedName,
     fullPath: normalizedFullPath,
     path: project?.path ?? normalizedFullPath,
+    accountId: project?.accountId,
   };
 };
 
@@ -158,7 +159,13 @@ export default function ProviderLoginModal({
               </button>
             </div>
           ) : (
-            <StandaloneShell project={shellProject} command={command} onComplete={handleComplete} minimal={true} />
+            <StandaloneShell
+              project={shellProject}
+              command={command}
+              accountId={typeof shellProject.accountId === 'string' ? shellProject.accountId : null}
+              onComplete={handleComplete}
+              minimal={true}
+            />
           )}
         </div>
       </div>

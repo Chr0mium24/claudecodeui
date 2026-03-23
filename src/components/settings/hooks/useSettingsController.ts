@@ -114,6 +114,10 @@ type NotificationPreferencesResponse = {
 };
 
 type ActiveLoginProvider = AgentProvider | '';
+type LoginTarget = {
+  provider: AgentProvider;
+  accountId?: string;
+};
 
 const KNOWN_MAIN_TABS: SettingsMainTab[] = ['agents', 'appearance', 'git', 'api', 'tasks', 'notifications', 'plugins'];
 
@@ -749,9 +753,12 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
     }
   }, [fetchCodexAccounts, fetchCodexMcpServers, fetchCursorMcpServers, fetchMcpServers]);
 
-  const openLoginForProvider = useCallback((provider: AgentProvider) => {
+  const openLoginForProvider = useCallback(({ provider, accountId }: LoginTarget) => {
     setLoginProvider(provider);
-    setSelectedProject(getDefaultProject(projects));
+    setSelectedProject({
+      ...getDefaultProject(projects),
+      ...(provider === 'codex' && accountId ? { accountId } : {}),
+    });
     setShowLoginModal(true);
   }, [projects]);
 
@@ -796,10 +803,11 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
 
     if (data.account?.id) {
       await setActiveCodexAccount(data.account.id);
-      return;
+      return data.account;
     }
 
     await fetchCodexAccounts();
+    return null;
   }, [fetchCodexAccounts, setActiveCodexAccount]);
 
   const removeCodexAccount = useCallback(async (accountId: string) => {

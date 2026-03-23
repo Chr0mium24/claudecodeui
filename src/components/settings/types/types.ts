@@ -16,6 +16,7 @@ export type SettingsProject = {
   displayName?: string;
   fullPath?: string;
   path?: string;
+  accountId?: string;
 };
 
 export type AuthStatus = {

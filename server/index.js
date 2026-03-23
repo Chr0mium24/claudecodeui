@@ -1655,6 +1655,7 @@ function handleShellConnection(ws) {
                 const hasSession = data.hasSession;
                 const provider = data.provider || 'claude';
                 const initialCommand = data.initialCommand;
+                const accountId = typeof data.accountId === 'string' && data.accountId.trim() ? data.accountId.trim() : null;
                 const isPlainShell = data.isPlainShell || (!!initialCommand && !hasSession) || provider === 'plain-shell';
                 const isCodexLoginCommand = typeof initialCommand === 'string' && /\bcodex\s+login\b/i.test(initialCommand);
                 urlDetectionBuffer = '';
@@ -1773,12 +1774,12 @@ function handleShellConnection(ws) {
                             shellCommand = 'cursor-agent';
                         }
                     } else if (provider === 'codex') {
-                        const activeCodexAccount = await resolveCodexAccount();
-                        shellEnv = buildCodexEnvironment(activeCodexAccount, shellEnv);
+                        const targetCodexAccount = await resolveCodexAccount(accountId);
+                        shellEnv = buildCodexEnvironment(targetCodexAccount, shellEnv);
 
                         // Use codex command; attempt to resume and fall back to a new session when the resume fails.
                         if (hasSession && sessionId) {
-                            await ensureCodexSessionAvailable(sessionId, activeCodexAccount.codexHome);
+                            await ensureCodexSessionAvailable(sessionId, targetCodexAccount.codexHome);
                             if (os.platform() === 'win32') {
                                 // PowerShell syntax for fallback
                                 shellCommand = `codex resume "${sessionId}"; if ($LASTEXITCODE -ne 0) { codex }`;
@@ -1829,8 +1830,8 @@ function handleShellConnection(ws) {
                     }
 
                     if (isPlainShell && isCodexLoginCommand) {
-                        const activeCodexAccount = await resolveCodexAccount();
-                        shellEnv = buildCodexEnvironment(activeCodexAccount, shellEnv);
+                        const targetCodexAccount = await resolveCodexAccount(accountId);
+                        shellEnv = buildCodexEnvironment(targetCodexAccount, shellEnv);
                     }
 
                     console.log('🔧 Executing shell command:', shellCommand);

@@ -8,9 +8,9 @@ import type { AgentProvider, AuthStatus, CodexAccount } from '../../../../../typ
 type AccountContentProps = {
   agent: AgentProvider;
   authStatus: AuthStatus;
-  onLogin: () => void;
+  onLogin: (accountId?: string) => void;
   codexAccounts?: CodexAccount[];
-  onCreateCodexAccount?: (name: string) => Promise<void>;
+  onCreateCodexAccount?: (name: string) => Promise<CodexAccount | null>;
   onSetActiveCodexAccount?: (accountId: string) => Promise<void>;
   onDeleteCodexAccount?: (accountId: string) => Promise<void>;
 };
@@ -74,6 +74,7 @@ export default function AccountContent({
   const config = agentConfig[agent];
   const [newCodexAccountName, setNewCodexAccountName] = useState('');
   const [isSubmittingCodexAccount, setIsSubmittingCodexAccount] = useState(false);
+  const [codexAccountError, setCodexAccountError] = useState<string | null>(null);
 
   const handleCreateCodexAccount = async () => {
     const name = newCodexAccountName.trim();
@@ -82,9 +83,15 @@ export default function AccountContent({
     }
 
     setIsSubmittingCodexAccount(true);
+    setCodexAccountError(null);
     try {
-      await onCreateCodexAccount(name);
+      const createdAccount = await onCreateCodexAccount(name);
       setNewCodexAccountName('');
+      if (createdAccount?.id) {
+        onLogin(createdAccount.id);
+      }
+    } catch (error) {
+      setCodexAccountError(error instanceof Error ? error.message : 'Failed to create Codex account');
     } finally {
       setIsSubmittingCodexAccount(false);
     }
@@ -150,7 +157,7 @@ export default function AccountContent({
                   </div>
                 </div>
                 <Button
-                  onClick={onLogin}
+                  onClick={() => onLogin()}
                   className={`${config.buttonClass} text-white`}
                   size="sm"
                 >
@@ -183,7 +190,12 @@ export default function AccountContent({
           <div className="mb-4 flex gap-2">
             <Input
               value={newCodexAccountName}
-              onChange={(event) => setNewCodexAccountName(event.target.value)}
+              onChange={(event) => {
+                setNewCodexAccountName(event.target.value);
+                if (codexAccountError) {
+                  setCodexAccountError(null);
+                }
+              }}
               placeholder="New account name"
             />
             <Button
@@ -197,6 +209,12 @@ export default function AccountContent({
               Add
             </Button>
           </div>
+
+          {codexAccountError ? (
+            <div className="mb-4 text-sm text-red-600 dark:text-red-400">
+              {codexAccountError}
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             {codexAccounts.map((account) => (
@@ -221,6 +239,16 @@ export default function AccountContent({
                 </div>
 
                 <div className="ml-3 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      onLogin(account.id);
+                    }}
+                  >
+                    {account.status?.authenticated ? 'Re-login' : 'Login'}
+                  </Button>
                   {!account.isActive && onSetActiveCodexAccount ? (
                     <Button
                       type="button"
