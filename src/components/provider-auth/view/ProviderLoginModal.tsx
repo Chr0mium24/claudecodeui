@@ -1,4 +1,5 @@
 import { ExternalLink, KeyRound, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
 import type { CliProvider } from '../types';
 
@@ -78,6 +79,14 @@ export default function ProviderLoginModal({
   customCommand,
   isAuthenticated = false,
 }: ProviderLoginModalProps) {
+  const [completedExitCode, setCompletedExitCode] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCompletedExitCode(null);
+    }
+  }, [isOpen, provider, project]);
+
   if (!isOpen) {
     return null;
   }
@@ -87,8 +96,8 @@ export default function ProviderLoginModal({
   const shellProject = normalizeProject(project);
 
   const handleComplete = (exitCode: number) => {
+    setCompletedExitCode(exitCode);
     onComplete?.(exitCode);
-    // Keep the modal open so users can read terminal output before closing.
   };
 
   return (
@@ -130,7 +139,7 @@ export default function ProviderLoginModal({
                         href="https://aistudio.google.com/app/apikey"
                         target="_blank"
                         rel="noreferrer"
-                        className="flex inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+                        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
                       >
                         Google AI Studio <ExternalLink className="h-3 w-3" />
                       </a>
@@ -158,11 +167,30 @@ export default function ProviderLoginModal({
                 Done
               </button>
             </div>
+          ) : completedExitCode === 0 && provider === 'codex' ? (
+            <div className="flex h-full flex-col items-center justify-center bg-gray-950 px-8 text-center">
+              <div className="w-full max-w-md rounded-2xl border border-emerald-800/60 bg-emerald-950/40 p-8">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-lg font-semibold text-white">
+                  OK
+                </div>
+                <h4 className="text-xl font-semibold text-white">Successfully logged in</h4>
+                <p className="mt-2 text-sm text-emerald-100/80">
+                  Codex authentication finished successfully. You can close this window now.
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-6 rounded-lg bg-emerald-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-emerald-500"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           ) : (
             <StandaloneShell
               project={shellProject}
               command={command}
               accountId={typeof shellProject.accountId === 'string' ? shellProject.accountId : null}
+              hideTerminalOutput={provider === 'codex'}
               onComplete={handleComplete}
               minimal={true}
             />

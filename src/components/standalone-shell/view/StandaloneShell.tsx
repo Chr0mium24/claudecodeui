@@ -9,6 +9,7 @@ type StandaloneShellProps = {
   session?: ProjectSession | null;
   command?: string | null;
   accountId?: string | null;
+  hideTerminalOutput?: boolean;
   isPlainShell?: boolean | null;
   isActive?: boolean;
   autoConnect?: boolean;
@@ -26,6 +27,7 @@ export default function StandaloneShell({
   session = null,
   command = null,
   accountId = null,
+  hideTerminalOutput = false,
   isPlainShell = null,
   isActive = true,
   autoConnect = true,
@@ -68,6 +70,7 @@ export default function StandaloneShell({
           selectedSession={session}
           initialCommand={command}
           accountId={accountId}
+          hideTerminalOutput={hideTerminalOutput}
           isPlainShell={shouldUsePlainShell}
           isActive={isActive}
           onProcessComplete={handleProcessComplete}

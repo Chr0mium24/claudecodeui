@@ -251,6 +251,24 @@ export async function createCodexAccount(input = {}) {
   return account;
 }
 
+export async function renameCodexAccount(accountId, nextName) {
+  const registry = await loadCodexRegistry();
+  const account = registry.accounts.find((entry) => entry.id === accountId);
+  if (!account) {
+    throw new Error(`Unknown Codex account: ${accountId}`);
+  }
+
+  const name = String(nextName || '').trim();
+  if (!name) {
+    throw new Error('Account name is required');
+  }
+
+  account.name = name;
+  account.updatedAt = new Date().toISOString();
+  await saveCodexRegistry(registry);
+  return account;
+}
+
 export async function setActiveCodexAccount(accountId) {
   const registry = await loadCodexRegistry();
   const account = registry.accounts.find((entry) => entry.id === accountId);

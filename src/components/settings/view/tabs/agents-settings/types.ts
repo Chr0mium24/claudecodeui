@@ -17,6 +17,7 @@ export type AgentContext = {
   onLogin: (accountId?: string) => void;
   codexAccounts?: CodexAccount[];
   onCreateCodexAccount?: (name: string) => Promise<CodexAccount | null>;
+  onRenameCodexAccount?: (accountId: string, name: string) => Promise<void>;
   onSetActiveCodexAccount?: (accountId: string) => Promise<void>;
   onDeleteCodexAccount?: (accountId: string) => Promise<void>;
 };
@@ -33,6 +34,7 @@ export type AgentsSettingsTabProps = {
   onCursorLogin: (accountId?: string) => void;
   onCodexLogin: (accountId?: string) => void;
   onCreateCodexAccount: (name: string) => Promise<CodexAccount | null>;
+  onRenameCodexAccount: (accountId: string, name: string) => Promise<void>;
   onSetActiveCodexAccount: (accountId: string) => Promise<void>;
   onDeleteCodexAccount: (accountId: string) => Promise<void>;
   onGeminiLogin: (accountId?: string) => void;

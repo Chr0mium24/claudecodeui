@@ -69,6 +69,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     selectedProject,
     handleLoginComplete,
     createCodexAccount,
+    renameCodexAccount,
     setActiveCodexAccount,
     removeCodexAccount,
   } = useSettingsController({
@@ -170,6 +171,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                   onCursorLogin={() => openLoginForProvider({ provider: 'cursor' })}
                   onCodexLogin={(accountId) => openLoginForProvider({ provider: 'codex', accountId })}
                   onCreateCodexAccount={createCodexAccount}
+                  onRenameCodexAccount={renameCodexAccount}
                   onSetActiveCodexAccount={setActiveCodexAccount}
                   onDeleteCodexAccount={removeCodexAccount}
                   onGeminiLogin={() => openLoginForProvider({ provider: 'gemini' })}

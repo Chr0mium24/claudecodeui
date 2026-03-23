@@ -10,6 +10,7 @@ import {
   createCodexAccount,
   deleteCodexAccount,
   listCodexAccounts,
+  renameCodexAccount,
   resolveCodexAccountFromRequest,
   setActiveCodexAccount,
 } from '../codex-accounts.js';
@@ -106,6 +107,16 @@ router.post('/accounts', async (req, res) => {
   try {
     const account = await createCodexAccount(req.body ?? {});
     res.status(201).json({ success: true, account });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/accounts/:accountId', async (req, res) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name : '';
+    const account = await renameCodexAccount(req.params.accountId, name);
+    res.json({ success: true, account });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }

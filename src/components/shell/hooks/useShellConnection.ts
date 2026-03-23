@@ -25,6 +25,7 @@ type UseShellConnectionOptions = {
   closeSocket: () => void;
   clearTerminalScreen: () => void;
   setAuthUrl: (nextAuthUrl: string) => void;
+  setAuthCode: (nextAuthCode: string) => void;
   onOutputRef?: MutableRefObject<(() => void) | null>;
 };
 
@@ -51,6 +52,7 @@ export function useShellConnection({
   closeSocket,
   clearTerminalScreen,
   setAuthUrl,
+  setAuthCode,
   onOutputRef,
 }: UseShellConnectionOptions): UseShellConnectionResult {
   const [isConnected, setIsConnected] = useState(false);
@@ -93,6 +95,11 @@ export function useShellConnection({
 
       if (message.type === 'output') {
         const output = typeof message.data === 'string' ? message.data : '';
+        const sanitizedOutput = output.replace(ANSI_ESCAPE_REGEX, '');
+        const codeMatch = sanitizedOutput.match(/\b([A-Z0-9]{4}-[A-Z0-9]{5})\b/);
+        if (codeMatch) {
+          setAuthCode(codeMatch[1]);
+        }
         handleProcessCompletion(output);
         terminalRef.current?.write(output);
         onOutputRef?.current?.();
@@ -106,7 +113,7 @@ export function useShellConnection({
         }
       }
     },
-    [handleProcessCompletion, onOutputRef, setAuthUrl, terminalRef],
+    [handleProcessCompletion, onOutputRef, setAuthCode, setAuthUrl, terminalRef],
   );
 
   const connectWebSocket = useCallback(
@@ -216,7 +223,8 @@ export function useShellConnection({
     setIsConnecting(false);
     connectingRef.current = false;
     setAuthUrl('');
-  }, [clearTerminalScreen, closeSocket, setAuthUrl]);
+    setAuthCode('');
+  }, [clearTerminalScreen, closeSocket, setAuthCode, setAuthUrl]);
 
   useEffect(() => {
     if (!autoConnect || !isInitialized || isConnecting || isConnected) {

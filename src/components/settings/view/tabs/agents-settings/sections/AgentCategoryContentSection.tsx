@@ -39,6 +39,7 @@ export default function AgentCategoryContentSection({
           onLogin={agentContextById[selectedAgent].onLogin}
           codexAccounts={agentContextById[selectedAgent].codexAccounts}
           onCreateCodexAccount={agentContextById[selectedAgent].onCreateCodexAccount}
+          onRenameCodexAccount={agentContextById[selectedAgent].onRenameCodexAccount}
           onSetActiveCodexAccount={agentContextById[selectedAgent].onSetActiveCodexAccount}
           onDeleteCodexAccount={agentContextById[selectedAgent].onDeleteCodexAccount}
         />

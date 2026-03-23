@@ -24,6 +24,7 @@ export function useShellRuntime({
   const wsRef = useRef<WebSocket | null>(null);
 
   const [authUrl, setAuthUrl] = useState('');
+  const [authCode, setAuthCode] = useState('');
   const [authUrlVersion, setAuthUrlVersion] = useState(0);
 
   const selectedProjectRef = useRef(selectedProject);
@@ -123,6 +124,7 @@ export function useShellRuntime({
     closeSocket,
     clearTerminalScreen,
     setAuthUrl: setCurrentAuthUrl,
+    setAuthCode,
     onOutputRef,
   });
 
@@ -161,6 +163,7 @@ export function useShellRuntime({
     isInitialized,
     isConnecting,
     authUrl,
+    authCode,
     authUrlVersion,
     connectToShell,
     disconnectFromShell,

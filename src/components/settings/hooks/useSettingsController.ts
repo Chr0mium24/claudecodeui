@@ -810,6 +810,23 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
     return null;
   }, [fetchCodexAccounts, setActiveCodexAccount]);
 
+  const renameCodexAccount = useCallback(async (accountId: string, name: string) => {
+    const response = await authenticatedFetch(`/api/codex/accounts/${accountId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+
+    const data = await toResponseJson<CodexAccountsResponse>(response);
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || 'Failed to rename Codex account');
+    }
+
+    await Promise.all([
+      fetchCodexAccounts(),
+      checkAuthStatus('codex'),
+    ]);
+  }, [checkAuthStatus, fetchCodexAccounts]);
+
   const removeCodexAccount = useCallback(async (accountId: string) => {
     const response = await authenticatedFetch(`/api/codex/accounts/${accountId}`, {
       method: 'DELETE',
@@ -1039,6 +1056,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
     selectedProject,
     handleLoginComplete,
     createCodexAccount,
+    renameCodexAccount,
     setActiveCodexAccount,
     removeCodexAccount,
   };

@@ -26,6 +26,7 @@ type ShellProps = {
   selectedSession?: ProjectSession | null;
   initialCommand?: string | null;
   accountId?: string | null;
+  hideTerminalOutput?: boolean;
   isPlainShell?: boolean;
   onProcessComplete?: ((exitCode: number) => void) | null;
   minimal?: boolean;
@@ -38,6 +39,7 @@ export default function Shell({
   selectedSession = null,
   initialCommand = null,
   accountId = null,
+  hideTerminalOutput = false,
   isPlainShell = false,
   onProcessComplete = null,
   minimal = false,
@@ -58,6 +60,7 @@ export default function Shell({
     isInitialized,
     isConnecting,
     authUrl,
+    authCode,
     authUrlVersion,
     connectToShell,
     disconnectFromShell,
@@ -214,18 +217,22 @@ export default function Shell({
         <ShellMinimalView
           terminalContainerRef={terminalContainerRef}
           authUrl={authUrl}
+          authCode={authCode}
           authUrlVersion={authUrlVersion}
           initialCommand={initialCommand}
           isConnected={isConnected}
+          hideTerminalOutput={hideTerminalOutput}
           openAuthUrlInBrowser={openAuthUrlInBrowser}
           copyAuthUrlToClipboard={copyAuthUrlToClipboard}
         />
-        <TerminalShortcutsPanel
-          wsRef={wsRef}
-          terminalRef={terminalRef}
-          isConnected={isConnected}
-          bottomOffset="bottom-0"
-        />
+        {!hideTerminalOutput && (
+          <TerminalShortcutsPanel
+            wsRef={wsRef}
+            terminalRef={terminalRef}
+            isConnected={isConnected}
+            bottomOffset="bottom-0"
+          />
+        )}
       </>
     );
   }

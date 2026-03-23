@@ -1,6 +1,7 @@
-import { LogIn } from 'lucide-react';
+import { LogIn, Pencil, Settings2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { createPortal } from 'react-dom';
 import { Badge, Button, Input } from '../../../../../../../shared/view/ui';
 import SessionProviderLogo from '../../../../../../llm-logo-provider/SessionProviderLogo';
 import type { AgentProvider, AuthStatus, CodexAccount } from '../../../../../types/types';
@@ -11,6 +12,7 @@ type AccountContentProps = {
   onLogin: (accountId?: string) => void;
   codexAccounts?: CodexAccount[];
   onCreateCodexAccount?: (name: string) => Promise<CodexAccount | null>;
+  onRenameCodexAccount?: (accountId: string, name: string) => Promise<void>;
   onSetActiveCodexAccount?: (accountId: string) => Promise<void>;
   onDeleteCodexAccount?: (accountId: string) => Promise<void>;
 };
@@ -24,6 +26,12 @@ type AgentVisualConfig = {
   buttonClass: string;
   description?: string;
 };
+
+type CodexAccountMenuState = {
+  accountId: string;
+  top: number;
+  left: number;
+} | null;
 
 const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
   claude: {
@@ -67,6 +75,7 @@ export default function AccountContent({
   onLogin,
   codexAccounts = [],
   onCreateCodexAccount,
+  onRenameCodexAccount,
   onSetActiveCodexAccount,
   onDeleteCodexAccount,
 }: AccountContentProps) {
@@ -75,6 +84,8 @@ export default function AccountContent({
   const [newCodexAccountName, setNewCodexAccountName] = useState('');
   const [isSubmittingCodexAccount, setIsSubmittingCodexAccount] = useState(false);
   const [codexAccountError, setCodexAccountError] = useState<string | null>(null);
+  const [openCodexAccountMenu, setOpenCodexAccountMenu] = useState<CodexAccountMenuState>(null);
+  const [codexAccountActionId, setCodexAccountActionId] = useState<string | null>(null);
 
   const handleCreateCodexAccount = async () => {
     const name = newCodexAccountName.trim();
@@ -97,6 +108,94 @@ export default function AccountContent({
     }
   };
 
+  const handleRenameCodexAccount = async (account: CodexAccount) => {
+    if (!onRenameCodexAccount) {
+      return;
+    }
+
+    const nextName = window.prompt('Rename Codex account', account.name);
+    if (nextName === null) {
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName || trimmedName === account.name) {
+      return;
+    }
+
+    setCodexAccountError(null);
+    setCodexAccountActionId(account.id);
+    try {
+      await onRenameCodexAccount(account.id, trimmedName);
+      setOpenCodexAccountMenu(null);
+    } catch (error) {
+      setCodexAccountError(error instanceof Error ? error.message : 'Failed to rename Codex account');
+    } finally {
+      setCodexAccountActionId(null);
+    }
+  };
+
+  const handleSetActiveAccount = async (accountId: string) => {
+    if (!onSetActiveCodexAccount) {
+      return;
+    }
+
+    setCodexAccountError(null);
+    setCodexAccountActionId(accountId);
+    try {
+      await onSetActiveCodexAccount(accountId);
+    } catch (error) {
+      setCodexAccountError(error instanceof Error ? error.message : 'Failed to switch Codex account');
+    } finally {
+      setCodexAccountActionId(null);
+    }
+  };
+
+  const handleDeleteCodexAccount = async (account: CodexAccount) => {
+    if (!onDeleteCodexAccount || account.isDefault) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete Codex account "${account.name}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setCodexAccountError(null);
+    setCodexAccountActionId(account.id);
+    try {
+      await onDeleteCodexAccount(account.id);
+      setOpenCodexAccountMenu(null);
+    } catch (error) {
+      setCodexAccountError(error instanceof Error ? error.message : 'Failed to delete Codex account');
+    } finally {
+      setCodexAccountActionId(null);
+    }
+  };
+
+  const toggleCodexAccountMenu = (accountId: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 192;
+    const menuHeight = 132;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const nextLeft = Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 12);
+    const preferredTop = rect.bottom + 8;
+    const nextTop = preferredTop + menuHeight > viewportHeight
+      ? Math.max(12, rect.top - menuHeight - 8)
+      : preferredTop;
+
+    setOpenCodexAccountMenu((current) => (
+      current?.accountId === accountId
+        ? null
+        : {
+            accountId,
+            top: nextTop,
+            left: Math.max(12, nextLeft),
+          }
+    ));
+  };
+
   return (
     <div className="space-y-6">
       <div className="mb-4 flex items-center gap-3">
@@ -107,76 +206,78 @@ export default function AccountContent({
         </div>
       </div>
 
-      <div className={`${config.bgClass} border ${config.borderClass} rounded-lg p-4`}>
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <div className={`font-medium ${config.textClass}`}>
-                {t('agents.connectionStatus')}
+      {agent !== 'codex' && (
+        <div className={`${config.bgClass} border ${config.borderClass} rounded-lg p-4`}>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <div className={`font-medium ${config.textClass}`}>
+                  {t('agents.connectionStatus')}
+                </div>
+                <div className={`text-sm ${config.subtextClass}`}>
+                  {authStatus.loading ? (
+                    t('agents.authStatus.checkingAuth')
+                  ) : authStatus.authenticated ? (
+                    t('agents.authStatus.loggedInAs', {
+                      email: authStatus.email || t('agents.authStatus.authenticatedUser'),
+                    })
+                  ) : (
+                    t('agents.authStatus.notConnected')
+                  )}
+                </div>
               </div>
-              <div className={`text-sm ${config.subtextClass}`}>
+              <div>
                 {authStatus.loading ? (
-                  t('agents.authStatus.checkingAuth')
+                  <Badge variant="secondary" className="bg-muted">
+                    {t('agents.authStatus.checking')}
+                  </Badge>
                 ) : authStatus.authenticated ? (
-                  t('agents.authStatus.loggedInAs', {
-                    email: authStatus.email || t('agents.authStatus.authenticatedUser'),
-                  })
+                  <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                    {t('agents.authStatus.connected')}
+                  </Badge>
                 ) : (
-                  t('agents.authStatus.notConnected')
+                  <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
+                    {t('agents.authStatus.disconnected')}
+                  </Badge>
                 )}
               </div>
             </div>
-            <div>
-              {authStatus.loading ? (
-                <Badge variant="secondary" className="bg-muted">
-                  {t('agents.authStatus.checking')}
-                </Badge>
-              ) : authStatus.authenticated ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                  {t('agents.authStatus.connected')}
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
-                  {t('agents.authStatus.disconnected')}
-                </Badge>
-              )}
-            </div>
-          </div>
 
-          {authStatus.method !== 'api_key' && (
-            <div className="border-t border-border/50 pt-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className={`font-medium ${config.textClass}`}>
-                    {authStatus.authenticated ? t('agents.login.reAuthenticate') : t('agents.login.title')}
+            {authStatus.method !== 'api_key' && (
+              <div className="border-t border-border/50 pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className={`font-medium ${config.textClass}`}>
+                      {authStatus.authenticated ? t('agents.login.reAuthenticate') : t('agents.login.title')}
+                    </div>
+                    <div className={`text-sm ${config.subtextClass}`}>
+                      {authStatus.authenticated
+                        ? t('agents.login.reAuthDescription')
+                        : t('agents.login.description', { agent: config.name })}
+                    </div>
                   </div>
-                  <div className={`text-sm ${config.subtextClass}`}>
-                    {authStatus.authenticated
-                      ? t('agents.login.reAuthDescription')
-                      : t('agents.login.description', { agent: config.name })}
-                  </div>
+                  <Button
+                    onClick={() => onLogin()}
+                    className={`${config.buttonClass} text-white`}
+                    size="sm"
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    {authStatus.authenticated ? t('agents.login.reLoginButton') : t('agents.login.button')}
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => onLogin()}
-                  className={`${config.buttonClass} text-white`}
-                  size="sm"
-                >
-                  <LogIn className="mr-2 h-4 w-4" />
-                  {authStatus.authenticated ? t('agents.login.reLoginButton') : t('agents.login.button')}
-                </Button>
               </div>
-            </div>
-          )}
+            )}
 
-          {authStatus.error && (
-            <div className="border-t border-border/50 pt-4">
-              <div className="text-sm text-red-600 dark:text-red-400">
-                {t('agents.error', { error: authStatus.error })}
+            {authStatus.error && (
+              <div className="border-t border-border/50 pt-4">
+                <div className="text-sm text-red-600 dark:text-red-400">
+                  {t('agents.error', { error: authStatus.error })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {agent === 'codex' && (
         <div className="rounded-lg border border-border bg-card p-4">
@@ -230,6 +331,11 @@ export default function AccountContent({
                         Active
                       </Badge>
                     ) : null}
+                    {account.isDefault ? (
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                        Default
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="truncate text-sm text-muted-foreground">
                     {account.status?.authenticated
@@ -239,46 +345,106 @@ export default function AccountContent({
                 </div>
 
                 <div className="ml-3 flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      onLogin(account.id);
-                    }}
-                  >
-                    {account.status?.authenticated ? 'Re-login' : 'Login'}
-                  </Button>
                   {!account.isActive && onSetActiveCodexAccount ? (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      disabled={codexAccountActionId === account.id}
                       onClick={() => {
-                        void onSetActiveCodexAccount(account.id);
+                        void handleSetActiveAccount(account.id);
                       }}
                     >
                       Use
                     </Button>
                   ) : null}
-                  {!account.isDefault && onDeleteCodexAccount ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        void onDeleteCodexAccount(account.id);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Open settings for ${account.name}`}
+                    onClick={(event) => {
+                      toggleCodexAccountMenu(account.id, event);
+                    }}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {agent === 'codex' && openCodexAccountMenu && typeof document !== 'undefined'
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                aria-label="Close Codex account menu"
+                className="fixed inset-0 z-40 cursor-default bg-transparent"
+                onClick={() => {
+                  setOpenCodexAccountMenu(null);
+                }}
+              />
+              {(() => {
+                const account = codexAccounts.find((entry) => entry.id === openCodexAccountMenu.accountId);
+                if (!account) {
+                  return null;
+                }
+
+                return (
+                  <div
+                    className="fixed z-50 w-48 rounded-md border border-border bg-popover p-1 shadow-lg"
+                    style={{ top: openCodexAccountMenu.top, left: openCodexAccountMenu.left }}
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                      disabled={codexAccountActionId === account.id}
+                      onClick={() => {
+                        void handleRenameCodexAccount(account);
+                      }}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Rename
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                      disabled={codexAccountActionId === account.id}
+                      onClick={() => {
+                        setOpenCodexAccountMenu(null);
+                        onLogin(account.id);
+                      }}
+                    >
+                      <LogIn className="mr-2 h-4 w-4" />
+                      {account.status?.authenticated ? 'Re-login' : 'Login'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      disabled={Boolean(account.isDefault) || codexAccountActionId === account.id}
+                      onClick={() => {
+                        void handleDeleteCodexAccount(account);
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {account.isDefault ? 'Delete unavailable' : 'Delete'}
+                    </Button>
+                  </div>
+                );
+              })()}
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
